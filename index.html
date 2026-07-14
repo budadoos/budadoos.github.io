@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fruit Tic-Tac-Toe</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background: #f8f9fa; }
+        .scoreboard { display: inline-flex; gap: 30px; font-size: 22px; font-weight: bold; background: white; padding: 10px 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-top: 20px; }
+        .berry-score { color: #dc3545; } .nonberry-score { color: #007bff; }
+        .series-mode { font-size: 14px; color: #666; margin: 5px 0 25px; font-weight: bold; }
+        #setup-zone { background: white; padding: 15px; border-radius: 8px; display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        #matchup { font-size: 18px; font-weight: bold; color: #555; margin-bottom: 10px; }
+        #status { font-size: 22px; font-weight: bold; margin-bottom: 15px; }
+        .board { display: none; background: white; padding: 5px; border-radius: 5px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .row { display: flex; justify-content: center; }
+        .row div { border: 2px solid #333; height: 60px; width: 60px; display: flex; align-items: center; justify-content: center; font-size: 32px; cursor: pointer; margin: 2px; user-select: none; }
+        .winner-cell { background: #28a745 !important; color: white; }
+        .hint-cell { background: #fff3cd !important; }
+        button { padding: 10px 20px; font-size: 16px; font-weight: bold; background: #343a40; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .t-btn { font-size: 18px; padding: 12px 20px; } .b-btn { background: #dc3545; } .nb-btn { background: #007bff; }
+        #reset-btn, #tournament-reset-btn, #hint-btn { display: none; }
+    </style>
+</head>
+<body>
+    <div class="scoreboard">
+        <div class="berry-score">Berry: <span id="s-b">0</span></div>
+        <div class="nonberry-score">Non-Berry: <span id="s-n">0</span></div>
+    </div>
+    <div class="series-mode">🏆 FIRST TO 2 WINS</div>
+    <div id="setup-zone">
+        <p style="font-weight:bold; font-size:18px;">Select Player 1's Team Side:</p>
+        <button class="t-btn b-btn" onclick="start('berry')">Berry 🍓</button>
+        <button class="t-btn nb-btn" onclick="start('nonberry')">Non-Berry 🍏</button>
+    </div>
+    <div id="matchup"></div>
+    <div id="status"></div>
+    <div class="board" id="board">
+        <div class="row"><div onclick="place(this,0)"></div><div onclick="place(this,1)"></div><div onclick="place(this,2)"></div></div>
+        <div class="row"><div onclick="place(this,3)"></div><div onclick="place(this,4)"></div><div onclick="place(this,5)"></div></div>
+        <div class="row"><div onclick="place(this,6)"></div><div onclick="place(this,7)"></div><div onclick="place(this,8)"></div></div>
+    </div><br/>
+    <button id="hint-btn" onclick="getHint()">💡 Hint (2 Left)</button>
+    <button id="reset-btn" onclick="reset()">Next Round</button>
+    <button id="tournament-reset-btn" onclick="fullReset()">Reset Tournament</button>
+<script>
+    const berries = [{n:"Strawberry",e:"🍓"}, {n:"Blueberry",e:"🫐"}, {n:"Raspberry",e:"🍒"}];
+    const nonBerries = [{n:"Green Apple",e:"🍏"}, {n:"Banana",e:"🍌"}, {n:"Orange",e:"🍊"}, {n:"Pineapple",e:"🍍"}];
+    const wins = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+    let score = {berry:0, nonberry:0}, over = false, active = false, board = Array(9).fill(""), pEmoji, oEmoji, current, starter, p1Type;
+    
+    // FIXED: Separate independent counters so hints are never shared
+    let berryHints = 2, nonberryHints = 2;
+
+    const isBerryTeam = emoji => berries.some(b => b.e === emoji);
+
+    function pick() {
+        let f1 = berries[Math.floor(Math.random() * berries.length)], f2 = nonBerries[Math.floor(Math.random() * nonBerries.length)];
+        pEmoji = p1Type === 'berry' ? f1.e : f2.e; oEmoji = p1Type === 'berry' ? f2.e : f1.e;
+        document.getElementById("matchup").innerText = p1Type === 'berry' ? `P1: ${f1.n} ${f1.e} vs P2: ${f2.n} ${f2.e}` : `P1: ${f2.n} ${f2.e} vs P2: ${f1.n} ${f1.e}`;
+    }
+
+    function start(choice) {
+        p1Type = choice; pick(); current = starter = pEmoji; berryHints = 2; nonberryHints = 2;
+        document.getElementById("setup-zone").style.display = "none";
+        document.getElementById("board").style.display = "inline-block";
+        document.getElementById("reset-btn").style.display = "inline-block";
+        checkHintVisibility(); active = true; update(`Turn: ${current}`);
+    }
+
+    function update(txt) { document.getElementById("status").innerText = txt; }
+
+    function place(cell, idx) {
+        if (!active || board[idx] || over) return;
+        document.querySelectorAll(".board .row div").forEach(s => s.classList.remove("hint-cell"));
+        cell.innerText = board[idx] = current;
+        const combo = wins.find(c => board[c[0]] && board[c[0]]===board[c[1]] && board[c[0]]===board[c[2]]);
+        if (combo) {
+            combo.forEach(i => document.querySelectorAll(".board .row div")[i].classList.add("winner-cell"));
+            active = false; let rw = isBerryTeam(current) ? 'berry' : 'nonberry'; score[rw]++;
+            document.getElementById("s-b").innerText = score.berry; document.getElementById("s-n").innerText = score.nonberry;
+            if (score.berry === 2 || score.nonberry === 2) {
+                over = true; update(`🏆 Team ${rw === 'berry' ? 'Berry 🍓' : 'Non-Berry 🍏'} WINS THE TOURNAMENT!`);
+                document.getElementById("reset-btn").style.display = "none"; document.getElementById("hint-btn").style.display = "none";
+                document.getElementById("tournament-reset-btn").style.display = "inline-block";
+            } else {
+                update(`Fruit ${current} Wins Round! 🎉`); starter = starter === pEmoji ? oEmoji : pEmoji;
+                document.getElementById("hint-btn").style.display = "none";
+            }
+            return;
+        }
+        if (!board.includes("")) { active = false; update("It's a Draw! 🤝"); starter = starter === pEmoji ? oEmoji : pEmoji; document.getElementById("hint-btn").style.display = "none"; return; }
+        current = current === pEmoji ? oEmoji : pEmoji; update(`Turn: ${current}`); checkHintVisibility();
+    }
+
+    function findStrategicSpot(sym) {
+        for (let c of wins) {
+            let cnt = c.filter(i => board[i] === sym).length, empty = c.filter(i => !board[i]);
+            if (cnt === 2 && empty.length === 1) return empty[0];
+        }
+        return null;
+    }
+
+    function checkHintVisibility() {
+        let hb = document.getElementById("hint-btn"), currentLeft = isBerryTeam(current) ? berryHints : nonberryHints;
+        if (currentLeft <= 0 || over || !active) { hb.style.display = "none"; return; }
+        let opp = current === pEmoji ? oEmoji : pEmoji;
+        if (findStrategicSpot(current) !== null || findStrategicSpot(opp) !== null) {
+            hb.style.display = "inline-block"; hb.innerText = `💡 Hint (${currentLeft} Left)`;
+        } else { hb.style.display = "none"; }
+    }
+
+    function getHint() {
+        if (!active || over) return;
+        let isBerry = isBerryTeam(current), currentLeft = isBerry ? berryHints : nonberryHints;
+        if (currentLeft <= 0) return;
+        let squares = document.querySelectorAll(".board .row div"), opp = current === pEmoji ? oEmoji : pEmoji;
+        let idx = findStrategicSpot(current) !== null ? findStrategicSpot(current) : findStrategicSpot(opp);
+        if (idx !== null && idx !== -1) { 
+            if (isBerry) { berryHints--; } else { nonberryHints--; }
+            squares.forEach(s => s.classList.remove("hint-cell")); squares[idx].classList.add("hint-cell"); checkHintVisibility();
+        }
+    }
+
+    function clear() { board.fill(""); document.querySelectorAll(".board .row div").forEach(s => { s.innerText = ""; s.className = ""; }); }
+    
+    function reset() { 
+        if (over) return; clear(); let wasP1 = (starter === pEmoji); pick(); current = starter = wasP1 ? pEmoji : oEmoji;
+        berryHints = 2; nonberryHints = 2; active = true; update(`Turn: ${current}`); checkHintVisibility();
+    }
+    
+    function fullReset() { 
+        score = {berry:0, nonberry:0}; over = false; document.getElementById("s-b").innerText = document.getElementById("s-n").innerText = 0;
+        document.getElementById("tournament-reset-btn").style.display = "none"; document.getElementById("setup-zone").style.display = "inline-block";
+        document.getElementById("board").style.display = "none"; document.getElementById("reset-btn").style.display = "none"; document.getElementById("hint-btn").style.display = "none";
+        document.getElementById("matchup").innerText = ""; update(""); clear(); 
+    }
+</script>
+</body>
+</html>
